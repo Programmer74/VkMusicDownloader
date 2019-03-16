@@ -73,7 +73,7 @@ class Application {
                         print("tags ok... ")
                     }
 
-                    /*if (tag.lyrics.isNullOrEmpty()) {
+                    if (tag.lyrics.isNullOrEmpty()) {
                         val lyrics = lyricsRetriever.getLyrics(tag.artist, tag.title)
                         if (lyrics != null) {
                             print("lyrics found... ")
@@ -81,7 +81,7 @@ class Application {
                         }
                     } else {
                         print("lyrics ok... ")
-                    }*/
+                    }
 
                     if (tag.album.isNullOrEmpty()) {
                         val info = tagEnhancer.tryGetAlbumInfo(tag.artist, tag.title)

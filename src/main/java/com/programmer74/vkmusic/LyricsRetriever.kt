@@ -25,7 +25,7 @@ class LyricsRetriever(
 
         var ans = ""
         try {
-            ans = restApi.sendGet(url)
+            ans = restApi.sendGet(url, "185.248.161.164", 8888)
         } catch (e: Exception) {
             return null
         }

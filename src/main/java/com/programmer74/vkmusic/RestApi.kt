@@ -2,7 +2,9 @@ package com.programmer74.vkmusic
 
 import org.apache.commons.io.FileUtils
 import org.apache.commons.io.IOUtils
+import org.apache.http.HttpHost
 import org.apache.http.client.methods.HttpGet
+import org.apache.http.conn.params.ConnRoutePNames
 import org.apache.http.impl.client.DefaultHttpClient
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
@@ -13,10 +15,20 @@ import java.net.URI
 class RestApi(
         val userAgent: String
 ) {
+
     @Throws(Exception::class)
     fun sendGet(url: String): String {
+        return sendGet(url, null, 0)
+    }
+
+    @Throws(Exception::class)
+    fun sendGet(url: String, proxyHost: String?, proxyPort: Int): String {
         val client = DefaultHttpClient()
         val request = HttpGet(url)
+
+        if (proxyHost != null) {
+            client.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, HttpHost(proxyHost,proxyPort))
+        }
 
         request.addHeader("User-Agent", userAgent)
 
