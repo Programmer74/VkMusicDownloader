@@ -10,6 +10,18 @@ import kotlin.system.exitProcess
 class Application {
     companion object {
 
+        private fun clearString(s: String): String {
+            //I know this looks ugly AF, but for some reason regexps do not work
+            return s.replace("<", "")
+                    .replace(">", "")
+                    .replace("\"", "")
+                    .replace("|", "")
+                    .replace(":", "")
+                    .replace("*", "")
+                    .replace("/", "")
+                    .replace("\\", "")
+        }
+
         @JvmStatic
         fun main(args: Array<String>) {
             val token = args[0]
@@ -35,10 +47,13 @@ class Application {
             audios.forEachIndexed { index, vkAudio ->
 
                 try {
-                    val dirName = File(parentDestination, vkAudio.artist!!)
+                    val clearArtist = clearString(vkAudio.artist!!)
+                    val clearTitle = clearString(vkAudio.title!!)
+
+                    val dirName = File(parentDestination, clearArtist)
                     dirName.mkdir()
 
-                    var fileName = File(dirName, vkAudio.title!! + ".mp3")
+                    var fileName = File(dirName, "$clearTitle.mp3")
 
                     api.restApi.downloadFile(vkAudio.url!!, fileName)
                     print("[${index.toString().padStart(4, ' ')}/${audios.size}] Downloaded $fileName... ")
@@ -58,7 +73,7 @@ class Application {
                         print("tags ok... ")
                     }
 
-                    if (tag.lyrics.isNullOrEmpty()) {
+                    /*if (tag.lyrics.isNullOrEmpty()) {
                         val lyrics = lyricsRetriever.getLyrics(tag.artist, tag.title)
                         if (lyrics != null) {
                             print("lyrics found... ")
@@ -66,7 +81,7 @@ class Application {
                         }
                     } else {
                         print("lyrics ok... ")
-                    }
+                    }*/
 
                     if (tag.album.isNullOrEmpty()) {
                         val info = tagEnhancer.tryGetAlbumInfo(tag.artist, tag.title)
@@ -83,19 +98,22 @@ class Application {
                         print("album ok... ")
                     }
 
-                    val fixedFileName = File(dirName, vkAudio.title!! + "-fixed.mp3")
+                    val fixedFileName = File(dirName, clearTitle + "-fixed.mp3")
                     mp3file.save(fixedFileName.absolutePath)
 
                     Files.move(fixedFileName.toPath(), fileName.toPath(), StandardCopyOption.REPLACE_EXISTING)
 
                     if (!tag.album.isNullOrEmpty()) {
-                        val albumDir = File(dirName, tag.album)
+                        val albumDir = File(dirName.absolutePath, clearString(tag.album))
                         albumDir.mkdir()
-                        val newFileName = File(albumDir, tag.title + ".mp3")
+                        val newFileName = File(albumDir, clearString(tag.title) + ".mp3")
                         Files.move(fileName.toPath(), newFileName.toPath(), StandardCopyOption.REPLACE_EXISTING)
                     }
 
                     println("done ")
+
+                    //to avoid api breakings
+                    Thread.sleep(500)
                 } catch (e: Exception) {
                     println(" error $e")
                 }
