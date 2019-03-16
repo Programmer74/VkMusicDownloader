@@ -24,6 +24,8 @@ class Application {
             parentDestination.mkdir()
 
             val api = VkApi(token, secret)
+            val lyricsRetriever = LyricsRetriever(api.restApi)
+            val tagEnhancer = TagEnhancer(api.restApi)
 
             println("Retrieving audios...")
             val audios = api.getAudios(155436363)
@@ -32,31 +34,70 @@ class Application {
 
             audios.forEachIndexed { index, vkAudio ->
 
-                val dirName = File(parentDestination, vkAudio.artist!!)
-                dirName.mkdir()
+                try {
+                    val dirName = File(parentDestination, vkAudio.artist!!)
+                    dirName.mkdir()
 
-                val fileName = File(dirName, vkAudio.title!! + ".mp3")
+                    var fileName = File(dirName, vkAudio.title!! + ".mp3")
 
-                api.downloadFile(vkAudio.url!!, fileName)
-                print("[${index.toString().padStart(4, ' ')}/${audios.size}] Downloaded $fileName... ")
+                    api.restApi.downloadFile(vkAudio.url!!, fileName)
+                    print("[${index.toString().padStart(4, ' ')}/${audios.size}] Downloaded $fileName... ")
 
-                val mp3file = Mp3File(fileName)
+                    val mp3file = Mp3File(fileName)
 
-                if (!mp3file.hasId3v2Tag() || (mp3file.id3v2Tag.title.isNullOrEmpty())) {
-                    print("fixing tags... ")
-                    val tag = ID3v24Tag()
+                    val tag = if (!mp3file.hasId3v2Tag() || (mp3file.id3v2Tag.title.isNullOrEmpty())) ID3v24Tag()
+                    else mp3file.id3v2Tag
+
                     mp3file.id3v2Tag = tag
 
-                    tag.artist = vkAudio.artist!!
-                    tag.title = vkAudio.title!!
+                    if (tag.title.isNullOrEmpty() || tag.artist.isNullOrEmpty()) {
+                        print("fixing tags... ")
+                        tag.artist = vkAudio.artist!!
+                        tag.title = vkAudio.title!!
+                    } else {
+                        print("tags ok... ")
+                    }
+
+                    if (tag.lyrics.isNullOrEmpty()) {
+                        val lyrics = lyricsRetriever.getLyrics(tag.artist, tag.title)
+                        if (lyrics != null) {
+                            print("lyrics found... ")
+                            tag.lyrics = lyrics
+                        }
+                    } else {
+                        print("lyrics ok... ")
+                    }
+
+                    if (tag.album.isNullOrEmpty()) {
+                        val info = tagEnhancer.tryGetAlbumInfo(tag.artist, tag.title)
+                        if (info != null) {
+                            tag.album = info.album
+                            tag.track = info.track
+                            print("album found... ")
+                            if (info.cover != null) {
+                                tag.setAlbumImage(info.cover, "image/png")
+                                print("cover found... ")
+                            }
+                        }
+                    } else {
+                        print("album ok... ")
+                    }
 
                     val fixedFileName = File(dirName, vkAudio.title!! + "-fixed.mp3")
                     mp3file.save(fixedFileName.absolutePath)
 
                     Files.move(fixedFileName.toPath(), fileName.toPath(), StandardCopyOption.REPLACE_EXISTING)
+
+                    if (!tag.album.isNullOrEmpty()) {
+                        val albumDir = File(dirName, tag.album)
+                        albumDir.mkdir()
+                        val newFileName = File(albumDir, tag.title + ".mp3")
+                        Files.move(fileName.toPath(), newFileName.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                    }
+
                     println("done ")
-                } else {
-                    println("contains tags")
+                } catch (e: Exception) {
+                    println(" error $e")
                 }
             }
         }
