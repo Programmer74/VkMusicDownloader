@@ -27,6 +27,7 @@ class Application {
             val token = args[0]
             val secret = args[1]
             val parentDestination = File(args[2])
+            val offset = args[3].toInt()
 
             if (!parentDestination.isDirectory) {
                 println("$parentDestination should be directory")
@@ -44,7 +45,8 @@ class Application {
 
             println("Got ${audios.size} tracks")
 
-            audios.forEachIndexed { index, vkAudio ->
+            audios.drop(offset)
+                    .forEachIndexed { index, vkAudio ->
 
                 try {
                     val clearArtist = clearString(vkAudio.artist!!)
@@ -56,7 +58,7 @@ class Application {
                     var fileName = File(dirName, "$clearTitle.mp3")
 
                     api.restApi.downloadFile(vkAudio.url!!, fileName)
-                    print("[${index.toString().padStart(4, ' ')}/${audios.size}] Downloaded $fileName... ")
+                    print("[${(index + offset).toString().padStart(4, ' ')}/${audios.size}] Downloaded $fileName... ")
 
                     val mp3file = Mp3File(fileName)
 
@@ -113,7 +115,7 @@ class Application {
                     println("done ")
 
                     //to avoid api breakings
-                    Thread.sleep(500)
+                    Thread.sleep(1500)
                 } catch (e: Exception) {
                     println(" error $e")
                 }
