@@ -28,6 +28,7 @@ class Application {
             val secret = args[1]
             val parentDestination = File(args[2])
             val offset = args[3].toInt()
+            val userId = args[4].toInt()
 
             if (!parentDestination.isDirectory) {
                 println("$parentDestination should be directory")
@@ -41,7 +42,7 @@ class Application {
             val tagEnhancer = TagEnhancer(api.restApi)
 
             println("Retrieving audios...")
-            val audios = api.getAudios(155436363)
+            val audios = api.getAudios(userId)
 
             println("Got ${audios.size} tracks")
 
