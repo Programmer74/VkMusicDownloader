@@ -1,6 +1,12 @@
 package com.programmer74.vkmusic
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import feign.RequestLine
+
+interface VkApi {
+  @RequestLine("POST /method/audio.get")
+  fun getAudios(body: String): VkApiResponseWrapper<VkAudio>
+}
 
 data class VkApiResponseWrapper<T>(
   var response: VkApiResponse<T>? = null,
