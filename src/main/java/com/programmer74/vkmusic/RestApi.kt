@@ -1,89 +1,78 @@
 package com.programmer74.vkmusic
 
-import org.apache.commons.io.FileUtils
-import org.apache.commons.io.IOUtils
-import org.apache.http.HttpHost
-import org.apache.http.client.methods.HttpGet
-import org.apache.http.conn.params.ConnRoutePNames
-import org.apache.http.impl.client.DefaultHttpClient
-import java.io.BufferedReader
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.InputStreamReader
-import java.net.URI
+import feign.Util.CONTENT_LENGTH
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody
+import java.io.*
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.util.*
 
 class RestApi(
   private val userAgent: String
 ) {
 
-  @Throws(Exception::class)
-  fun sendGet(url: String): String {
-    return sendGet(url, null, 0)
-  }
+  fun sendGet(url: String, proxyHost: String? = null, proxyPort: Int = 0): String {
+    val client = if (proxyHost != null) {
+      OkHttpClient.Builder()
+          .proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)))
+          .build()
+    } else OkHttpClient()
+    val request = Request.Builder().url(url).header("User-Agent", userAgent).build()
 
-  @Throws(Exception::class)
-  fun sendGet(url: String, proxyHost: String?, proxyPort: Int): String {
-    val client = DefaultHttpClient()
-    val request = HttpGet(url)
+    val response: Response = client.newCall(request).execute()
 
-    if (proxyHost != null) {
-      client.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, HttpHost(proxyHost, proxyPort))
+    if (response.code != 200) {
+      error("got ${response.code} on $url; ${response.body}")
     }
 
-    request.addHeader("User-Agent", userAgent)
-
-    val response = client.execute(request)
-
-    val reasonPhrase = response.statusLine.reasonPhrase
-    val statusCode = response.statusLine.statusCode
-
-    if (response.statusLine.statusCode != 200) {
-      throw Exception("Status code $statusCode on url $url with reason $reasonPhrase")
-    }
-
-    val rd = BufferedReader(
-        InputStreamReader(response.entity.content))
-
-    val result = StringBuffer()
-    var line: String? = ""
-    while (line != null) {
-      result.append(line)
-      line = rd.readLine()
-    }
-
-    return result.toString()
+    val responseBody: ResponseBody = response.body ?: error("request error")
+    return responseBody.string()
   }
 
   fun downloadFile(url: String, path: File) {
-    val uri = URI(url)
-    val request = HttpGet(uri)
-    request.addHeader("User-Agent", userAgent)
+    val client = OkHttpClient()
+    val writer = BinaryFileWriter(FileOutputStream(path)) { }
+    BinaryFileDownloader(client, writer).download(url)
+  }
 
-    val httpclient = DefaultHttpClient()
+  class BinaryFileDownloader(
+    private val client: OkHttpClient,
+    private val writer: BinaryFileWriter
+  ) {
 
-    val response = httpclient.execute(request)
-
-    val reasonPhrase = response.statusLine.reasonPhrase
-    val statusCode = response.statusLine.statusCode
-
-    if (response.statusLine.statusCode != 200) {
-      throw Exception("Status code $statusCode on url $url with reason $reasonPhrase")
+    fun download(url: String): Long {
+      val request = Request.Builder().url(url).build()
+      val response = client.newCall(request).execute()
+      val responseBody = response.body
+        ?: throw IllegalStateException("Response doesn't contain a file")
+      val length = Objects.requireNonNull(response.header(CONTENT_LENGTH, "1"))?.toLong()
+        ?: error("cannot parse length")
+      return writer.write(responseBody.byteStream(), length)
     }
+  }
 
-    val entity = response.entity
-    val content = entity.content
+  class BinaryFileWriter(
+    private val outputStream: OutputStream,
+    private val progressCallback: (Double) -> Unit
+  ) {
 
-    val baos = ByteArrayOutputStream(1024 * 1024)
-
-    // apache IO util
-    try {
-      IOUtils.copy(content, baos)
-    } finally {
-      // close http network connection
-      content.close()
+    fun write(inputStream: InputStream, length: Long): Long {
+      BufferedInputStream(inputStream).use { input ->
+        val dataBuffer = ByteArray(1024)
+        var readBytes: Int
+        var totalBytes: Long = 0
+        while (input.read(dataBuffer).also { readBytes = it } != -1) {
+          totalBytes += readBytes.toLong()
+          outputStream.write(dataBuffer, 0, readBytes)
+          progressCallback.invoke(totalBytes / length * 100.0);
+        }
+        return totalBytes.also {
+          outputStream.close()
+        }
+      }
     }
-    val bytes = baos.toByteArray()
-
-    FileUtils.writeByteArrayToFile(path, bytes)
   }
 }
