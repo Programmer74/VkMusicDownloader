@@ -11,7 +11,7 @@ class RestApiTest {
   @Disabled("manual use only")
   fun `can perform get rq`() {
     //given
-    val ra = RestApi("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36")
+    val ra = RestApi()
     //when
     val html = ra.sendGet("https://github.com/nikita-tomilov")
     //then
@@ -25,9 +25,20 @@ class RestApiTest {
     val url = "https://raw.githubusercontent.com/nikita-tomilov/hawk/master/Makefile"
     val file = Files.createTempFile("test", "").toFile()
     //when
-    RestApi("").downloadFile(url, file)
+    RestApi().downloadFile(url, file)
     //then
     val content = Files.readAllLines(file.toPath()).joinToString(" ")
     assertThat(content).contains("lex.yy.c")
+  }
+
+  @Test
+  @Disabled("manual use only")
+  fun `can download file with support for redirects`() {
+    //given
+    val url = "http://coverartarchive.org/release/f3af0dc4-2959-438e-8b6a-73bb0139e06d/30937134031.jpg"
+    //when
+    val bytes = RestApi().downloadFile(url)
+    //then
+    assertThat(bytes).hasSize(161457)
   }
 }

@@ -11,7 +11,7 @@ import java.net.Proxy
 import java.util.*
 
 class RestApi(
-  private val userAgent: String
+  private val userAgent: String = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36"
 ) {
 
   fun sendGet(url: String, proxyHost: String? = null, proxyPort: Int = 0): String {
@@ -36,6 +36,14 @@ class RestApi(
     val client = OkHttpClient()
     val writer = BinaryFileWriter(FileOutputStream(path)) { }
     BinaryFileDownloader(client, writer).download(url)
+  }
+
+  fun downloadFile(url: String): ByteArray {
+    val client = OkHttpClient()
+    val arr = ByteArrayOutputStream()
+    val writer = BinaryFileWriter(arr) { }
+    BinaryFileDownloader(client, writer).download(url)
+    return arr.toByteArray()
   }
 
   class BinaryFileDownloader(
