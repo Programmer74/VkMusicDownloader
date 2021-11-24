@@ -12,6 +12,8 @@ class VkApiTest {
       val gw = VkApiGateway(token, secret)
       val audios = gw.getAudios(userId)
       logger.warn { "Got ${audios.size} tracks, cool!" }
+      val l = gw.getLyrics(409521271)
+      logger.warn { "Lyrics are of size ${l?.length}" }
     }
   }
 }

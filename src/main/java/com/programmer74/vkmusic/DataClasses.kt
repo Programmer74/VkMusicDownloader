@@ -5,17 +5,20 @@ import feign.RequestLine
 
 interface VkApi {
   @RequestLine("POST /method/audio.get")
-  fun getAudios(body: String): VkApiResponseWrapper<VkAudio>
+  fun getAudios(body: String): VkApiResponseWrapper<VkApiResponseList<VkAudio>>
+
+  @RequestLine("POST /method/audio.getLyrics")
+  fun getLyrics(body: String): VkApiResponseWrapper<VkLyrics>
 }
 
-data class VkApiResponseWrapper<T>(
-  var response: VkApiResponse<T>? = null,
-  var error: Map<Any, Any>? = null
-)
-
-data class VkApiResponse<T>(
+data class VkApiResponseList<T>(
   var count: Int? = null,
   var items: List<T>? = null
+)
+
+data class VkApiResponseWrapper<T>(
+  var response: T? = null,
+  var error: Map<Any, Any>? = null
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -28,4 +31,10 @@ data class VkAudio(
   var url: String? = null,
   var lyrics_id: Int? = null,
   var genre_id: Int? = null
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class VkLyrics(
+  var lyrics_id: Long? = null,
+  var text: String? = null
 )

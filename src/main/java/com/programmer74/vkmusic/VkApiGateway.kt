@@ -30,17 +30,31 @@ class VkApiGateway(
     rq += "&sig=$sig"
     return when (method) {
       "audio.get" -> api.getAudios(rq)
+      "audio.getLyrics" -> api.getLyrics(rq)
       else -> error("unknown method $method")
     }
   }
 
   @Suppress("UNCHECKED_CAST")
   fun getAudios(ownerId: Int): List<VkAudio> {
-    val ans = doMethod("audio.get", mapOf("owner_id" to ownerId.toString(), "count" to "5000"))
+    val ans = doMethod(
+        "audio.get",
+        mapOf("owner_id" to ownerId.toString(), "count" to "5000")
+    ) as VkApiResponseWrapper<VkApiResponseList<VkAudio>>
     if (ans.error != null) {
       error(ans.error!!)
     }
-    return (ans.response?.items as List<VkAudio>?) ?: emptyList()
+    return (ans.response?.items) ?: emptyList()
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  fun getLyrics(lyricsId: Long): String? {
+    val ans = doMethod("audio.getLyrics", mapOf("lyrics_id" to lyricsId.toString()))
+        as VkApiResponseWrapper<VkLyrics>
+    if (ans.error != null) {
+      error(ans.error!!)
+    }
+    return ans.response?.text
   }
 
   companion object {
