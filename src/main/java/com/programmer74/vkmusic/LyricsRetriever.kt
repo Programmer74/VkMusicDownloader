@@ -1,18 +1,11 @@
 package com.programmer74.vkmusic
 
 import org.jsoup.Jsoup
+import java.util.*
 
 class LyricsRetriever(
-  val restApi: RestApi
+  private val restApi: RestApi
 ) {
-
-  private val API_PATH = "https://www.azlyrics.com/lyrics"
-
-  private val regex = Regex.fromLiteral("[^a-z]")
-
-  fun clearString(x: String): String {
-    return x.toLowerCase().replace(regex, "").replace(" ", "")
-  }
 
   fun getLyrics(rawArtist: String, rawTitle: String): String? {
     val artist = clearString(rawArtist)
@@ -25,7 +18,7 @@ class LyricsRetriever(
 
     var ans = ""
     try {
-      ans = restApi.sendGet(url, "91.235.42.20", 3130)
+      ans = restApi.sendGet(url)
     } catch (e: Exception) {
       return null
     }
@@ -41,7 +34,15 @@ class LyricsRetriever(
 
     val lyricsRaw = ans.substring(from..to - 1).replace("<br>", "\\n")
     val lyrics = Jsoup.parse(lyricsRaw).text().replace("\\n", System.lineSeparator())
+    val lines = lyrics.split(System.lineSeparator())
+    return lines.take(lines.size - 2).joinToString(System.lineSeparator())
+  }
 
-    return lyrics
+  companion object {
+    private val API_PATH = "https://www.azlyrics.com/lyrics"
+    private val regex = Regex.fromLiteral("[^a-z]")
+    fun clearString(x: String): String {
+      return x.lowercase(Locale.getDefault()).replace(regex, "").replace(" ", "")
+    }
   }
 }

@@ -13,7 +13,7 @@ import java.io.InputStreamReader
 import java.net.URI
 
 class RestApi(
-  val userAgent: String
+  private val userAgent: String
 ) {
 
   @Throws(Exception::class)
@@ -24,7 +24,7 @@ class RestApi(
   @Throws(Exception::class)
   fun sendGet(url: String, proxyHost: String?, proxyPort: Int): String {
     val client = DefaultHttpClient()
-      val request = HttpGet(url)
+    val request = HttpGet(url)
 
     if (proxyHost != null) {
       client.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, HttpHost(proxyHost, proxyPort))
