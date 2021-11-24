@@ -48,7 +48,7 @@ class VkApiGateway(
   }
 
   @Suppress("UNCHECKED_CAST")
-  fun getLyrics(lyricsId: Long): String? {
+  fun getLyrics(lyricsId: Int): String? {
     val ans = doMethod("audio.getLyrics", mapOf("lyrics_id" to lyricsId.toString()))
         as VkApiResponseWrapper<VkLyrics>
     if (ans.error != null) {

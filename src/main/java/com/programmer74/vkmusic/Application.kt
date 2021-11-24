@@ -1,7 +1,9 @@
 package com.programmer74.vkmusic
 
+import com.mpatric.mp3agic.ID3v2
 import com.mpatric.mp3agic.ID3v24Tag
 import com.mpatric.mp3agic.Mp3File
+import mu.KLogging
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -10,22 +12,20 @@ import kotlin.random.nextInt
 import kotlin.system.exitProcess
 
 class Application {
-  companion object {
+  companion object : KLogging() {
 
-    private fun clearString(s: String): String {
-      //I know this looks ugly AF, but for some reason regexps do not work
-      return s.replace("<", "")
-          .replace(">", "")
-          .replace("\"", "")
-          .replace("|", "")
-          .replace(":", "")
-          .replace("*", "")
-          .replace("/", "")
-          .replace("\\", "")
-    }
+    private val regex = Regex("[\\\\/:\"*<>|]")
+    private val restApi = RestApi()
+    private lateinit var vkApiGateway: VkApiGateway
+    private val lyricsRetriever = LyricsRetriever(restApi)
+    private val musicBrainzGateway = MusicBrainzGateway(restApi)
 
-      @JvmStatic
+    @JvmStatic
     fun main(args: Array<String>) {
+      if (args.isEmpty()) {
+        logger.warn { "Usage: ./executable <token> <secret> <target music folder> <offset> <userId>" }
+      }
+
       val token = args[0]
       val secret = args[1]
       val parentDestination = File(args[2])
@@ -33,108 +33,143 @@ class Application {
       val userId = args[4].toInt()
 
       if (!parentDestination.isDirectory) {
-        println("$parentDestination should be directory")
+        logger.error { "$parentDestination should be directory" }
         exitProcess(-1)
       }
 
       parentDestination.mkdir()
 
-      val restApi = RestApi()
-      val vkApiGateway = VkApiGateway(token, secret)
-      val lyricsRetriever = LyricsRetriever(restApi)
-      val musicBrainzGateway = MusicBrainzGateway(restApi)
-
-      println("Retrieving audios...")
+      logger.warn { "Retrieving audios..." }
+      vkApiGateway = VkApiGateway(token, secret)
       val audios = vkApiGateway.getAudios(userId)
 
-      println("Got ${audios.size} tracks")
-
+      logger.warn { "Got ${audios.size} tracks" }
       audios.drop(offset)
           .forEachIndexed { index, vkAudio ->
-
             try {
-              val clearArtist = clearString(vkAudio.artist!!)
-              val clearTitle = clearString(vkAudio.title!!)
-
-              val dirName = File(parentDestination, clearArtist)
-              dirName.mkdir()
-
-              val fileName = File(dirName, "$clearTitle.mp3")
-
-              restApi.downloadFile(vkAudio.url!!, fileName)
-              print(
-                  "[${
-                    (index + offset).toString()
-                        .padStart(4, ' ')
-                  }/${audios.size}] Downloaded $fileName... ")
-
-              val mp3file = Mp3File(fileName)
-
-              val tag =
-                  if (!mp3file.hasId3v2Tag() || (mp3file.id3v2Tag.title.isNullOrEmpty())) ID3v24Tag()
-                  else mp3file.id3v2Tag
-
-              mp3file.id3v2Tag = tag
-
-              if (tag.title.isNullOrEmpty() || tag.artist.isNullOrEmpty()) {
-                print("fixing tags... ")
-                tag.artist = vkAudio.artist!!
-                tag.title = vkAudio.title!!
-              } else {
-                print("tags ok... ")
-              }
-
-              if (tag.lyrics.isNullOrEmpty()) {
-                val lyrics = lyricsRetriever.getLyrics(tag.artist, tag.title)
-                if (lyrics != null) {
-                  print("lyrics found... ")
-                  tag.lyrics = lyrics
-                }
-              } else {
-                print("lyrics ok... ")
-              }
-
-              if (tag.album.isNullOrEmpty()) {
-                val info = musicBrainzGateway.tryGetAlbumInfo(tag.artist, tag.title)
-                if (info != null) {
-                  tag.album = info.album
-                  tag.track = info.track
-                  print("album found... ")
-                  if (info.cover != null) {
-                    tag.setAlbumImage(info.cover, "image/png")
-                    print("cover found... ")
-                  }
-                }
-              } else {
-                print("album ok... ")
-              }
-
-              val fixedFileName = File(dirName, "$clearTitle-fixed.mp3")
-              mp3file.save(fixedFileName.absolutePath)
-
-              Files.move(
-                  fixedFileName.toPath(),
-                  fileName.toPath(),
-                  StandardCopyOption.REPLACE_EXISTING)
-
-              if (!tag.album.isNullOrEmpty()) {
-                val albumDir = File(dirName.absolutePath, clearString(tag.album))
-                albumDir.mkdir()
-                val newFileName = File(albumDir, clearString(tag.title) + ".mp3")
-                Files.move(
-                    fileName.toPath(),
-                    newFileName.toPath(),
-                    StandardCopyOption.REPLACE_EXISTING)
-              }
-
-              println("done ")
-
-              //to avoid api breakings
-              Thread.sleep(1000L + Random.nextInt(500..1500))
+              saveAudio(index, vkAudio, audios.size, parentDestination, offset)
             } catch (e: Exception) {
-              println(" error $e")
+              logger.error(e) { "Error in main loop" }
             }
           }
+    }
+
+    private fun saveAudio(
+      index: Int,
+      vkAudio: VkAudio,
+      count: Int,
+      parentDestination: File,
+      offset: Int
+    ) {
+      val clearArtist = clearString(vkAudio.artist!!)
+      val clearTitle = clearString(vkAudio.title!!)
+
+      val dirName = File(parentDestination, clearArtist)
+      dirName.mkdir()
+
+      val downloadedFile = File(dirName, "$clearTitle.mp3")
+      restApi.downloadFile(vkAudio.url!!, downloadedFile)
+      val preamble = "[${(index + offset).toString().padStart(4, ' ')}/${count}]"
+      logger.warn { "$preamble Downloaded $downloadedFile" }
+
+      val mp3file = Mp3File(downloadedFile)
+
+      var tag =
+          if (!mp3file.hasId3v2Tag() || (mp3file.id3v2Tag.title.isNullOrEmpty())) ID3v24Tag()
+          else mp3file.id3v2Tag
+
+      mp3file.id3v2Tag = tag
+
+      tag = fillArtistAndTitle(tag, vkAudio)
+      tag = fillLyrics(tag, vkAudio)
+      tag = fillAlbumCover(tag)
+
+      val fixedFileName = File(dirName, "$clearTitle-fixed.mp3")
+      mp3file.save(fixedFileName.absolutePath)
+      Files.move(
+          fixedFileName.toPath(),
+          downloadedFile.toPath(),
+          StandardCopyOption.REPLACE_EXISTING)
+
+      if (!tag.album.isNullOrEmpty()) {
+        val albumDir = File(dirName.absolutePath, clearString(tag.album))
+        albumDir.mkdir()
+        val patchedFile = File(albumDir, clearString(tag.title) + ".mp3")
+        Files.move(
+            downloadedFile.toPath(),
+            patchedFile.toPath(),
+            StandardCopyOption.REPLACE_EXISTING)
+      }
+
+      logger.warn { "  Done for this file" }
+      //to avoid being banned for scraping
+      Thread.sleep(1000L + Random.nextInt(500..1500))
+    }
+
+    private fun fillArtistAndTitle(tag: ID3v2, vkAudio: VkAudio): ID3v2 {
+      if (tag.title.isNullOrEmpty() || tag.artist.isNullOrEmpty()) {
+        logger.warn { "  Adding Artist/Title to mp3 info" }
+        tag.artist = vkAudio.artist!!
+        tag.title = vkAudio.title!!
+      } else {
+        logger.warn { "  Artist/Title in mp3 info OK" }
+      }
+      return tag
+    }
+
+    private fun fillLyrics(tag: ID3v2, vkAudio: VkAudio): ID3v2 {
+      if (tag.lyrics.isNullOrEmpty()) {
+        logger.warn { "  Lyrics are not present in mp3 info" }
+        return if (vkAudio.lyrics_id != null) {
+          logger.warn { "  Lyrics are present in vk; retrieving" }
+          val lyrics = vkApiGateway.getLyrics(vkAudio.lyrics_id!!)
+          fillLyrics(tag, lyrics)
+        } else {
+          logger.warn { "  Lyrics are not present in vk; retrieving from external source..." }
+          val lyrics = lyricsRetriever.getLyrics(tag.artist, tag.title)
+          fillLyrics(tag, lyrics)
+        }
+      } else {
+        logger.warn { "  Lyrics are present in mp3 info" }
+      }
+      return tag
+    }
+
+    private fun fillLyrics(tag: ID3v2, lyrics: String?): ID3v2 {
+      if (lyrics != null) {
+        logger.warn { "    Done; shall add that to mp3 info" }
+        tag.lyrics = lyrics
+      } else {
+        logger.warn { "    Failed to find lyrics" }
+      }
+      return tag
+    }
+
+    private fun fillAlbumCover(tag: ID3v2): ID3v2 {
+      if (tag.album.isNullOrEmpty()) {
+        logger.warn { "  Album cover is not present in mp3 info; trying to retrieve" }
+        val info = musicBrainzGateway.tryGetAlbumInfo(tag.artist, tag.title)
+        if (info != null) {
+          tag.album = info.album
+          tag.track = info.track
+          logger.warn { "  Found album" }
+          if (info.cover != null) {
+            tag.setAlbumImage(info.cover, "image/png")
+            logger.warn { "    Found cover; shall add it to mp3 info" }
+          } else {
+            logger.warn { "    Failed to find cover" }
+          }
+        } else {
+          logger.warn { "    Failed to find album info" }
+        }
+      } else {
+        logger.warn { "  Album cover is present in mp3 info" }
+      }
+      return tag
+    }
+
+    private fun clearString(s: String): String {
+      return s.replace(regex, "")
     }
   }
 }

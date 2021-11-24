@@ -35,7 +35,9 @@ class LyricsRetriever(
     val lyricsRaw = ans.substring(from..to - 1).replace("<br>", "\\n")
     val lyrics = Jsoup.parse(lyricsRaw).text().replace("\\n", System.lineSeparator())
     val lines = lyrics.split(System.lineSeparator())
-    return lines.take(lines.size - 2).joinToString(System.lineSeparator())
+    return lines.take(lines.size - 2)
+        .filter { it.isNotBlank() }
+        .joinToString(System.lineSeparator())
   }
 
   companion object {
