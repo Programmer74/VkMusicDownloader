@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import feign.Feign
 import feign.jackson.JacksonDecoder
-import feign.jackson.JacksonEncoder
 import org.apache.commons.codec.digest.DigestUtils
 
 class VkApiGateway(
@@ -35,9 +34,13 @@ class VkApiGateway(
     }
   }
 
+  @Suppress("UNCHECKED_CAST")
   fun getAudios(ownerId: Int): List<VkAudio> {
     val ans = doMethod("audio.get", mapOf("owner_id" to ownerId.toString(), "count" to "5000"))
-    return emptyList()
+    if (ans.error != null) {
+      error(ans.error!!)
+    }
+    return (ans.response?.items as List<VkAudio>?) ?: emptyList()
   }
 
   companion object {
